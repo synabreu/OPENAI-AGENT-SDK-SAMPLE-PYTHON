@@ -1,14 +1,125 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Python File",
+            "name": "GPT-5.5 samples: all",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}"
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "all"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: hello",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "hello"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: tools",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "tools"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: structured",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "structured"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: handoff",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "handoff"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: agents-as-tools",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "agents-as-tools"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: guardrails",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "guardrails"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: streaming",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "streaming"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: memory",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "memory"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "GPT-5.5 sample: tracing",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.gpt55_feature_samples",
+            "args": ["--feature", "tracing"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
+            "name": "Python Debugger: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
         }
     ]
 }
