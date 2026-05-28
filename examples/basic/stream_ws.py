@@ -1,21 +1,28 @@
-"""Responses websocket streaming example with function tools, agent-as-tool, and approval.
+"""Responses 웹소켓 스트리밍 예제 (함수 도구, 에이전트-도구, 승인 흐름 포함).
 
-This example shows a user-facing websocket workflow using
-`responses_websocket_session(...)`:
-- Streaming output (including reasoning summary deltas when available)
-- Regular function tools
-- An `Agent.as_tool(...)` specialist agent
-- HITL approval for a sensitive tool call
-- A follow-up turn using `previous_response_id` on the same trace
+사용자용 웹소켓 워크플로우를 `responses_websocket_session(...)`로 시연합니다:
+- 스트리밍 출력(가능한 경우 reasoning summary 델타 포함)
+- 일반 함수 도구(function tools)
+- 전문가 에이전트를 `Agent.as_tool(...)`로 도구화
+- 민감한 도구 호출에 대한 사람(HITL) 승인 흐름
+- 동일 트레이스에서 `previous_response_id`를 사용하는 후속 턴
 
-Required environment variable:
+필수 환경 변수:
 - `OPENAI_API_KEY`
 
-Optional environment variables:
-- `OPENAI_MODEL` (defaults to `gpt-5.5`)
+선택 환경 변수:
+- `OPENAI_MODEL` (기본값: `gpt-5.5`)
 - `OPENAI_BASE_URL`
 - `OPENAI_WEBSOCKET_BASE_URL`
-- `EXAMPLES_INTERACTIVE_MODE=auto` (auto-approve HITL prompts for scripted runs)
+- `EXAMPLES_INTERACTIVE_MODE=auto` (예제 자동화 모드에서 HITL 프롬프트 자동 승인)
+
+실행 방법 (터미널 예시):
+1. 가상환경 활성화(선택):
+    source .venv/bin/activate
+2. 필요 시 의존성 설치/동기화:
+    make sync
+3. 스크립트 실행:
+    python examples/basic/stream_ws.py
 """
 
 import os as _os
@@ -77,7 +84,7 @@ from examples.auto_mode import confirm_with_fallback
 
 @function_tool
 def lookup_order(order_id: str) -> dict[str, Any]:
-    """Return deterministic order data for the demo."""
+    """데모용으로 결정론적(order_id에 따라 고정된) 주문 정보를 반환합니다."""
     orders = {
         "ORD-1001": {
             "order_id": "ORD-1001",
@@ -111,7 +118,7 @@ def lookup_order(order_id: str) -> dict[str, Any]:
 
 @function_tool(needs_approval=True)
 def submit_refund(order_id: str, amount: float, reason: str) -> dict[str, Any]:
-    """Create a refund request. This tool requires approval."""
+    """환불 요청을 생성하는 도구입니다. 이 도구는 승인이 필요합니다."""
     ticket = "RF-1001" if order_id == "ORD-1001" else f"RF-{order_id[-4:]}"
     return {
         "refund_ticket": ticket,
@@ -123,7 +130,7 @@ def submit_refund(order_id: str, amount: float, reason: str) -> dict[str, Any]:
 
 
 def ask_approval(question: str) -> bool:
-    """Prompt for approval (or auto-approve in examples auto mode)."""
+    """승인 허가를 요청합니다. 예제의 자동 모드에서는 자동 승인됩니다."""
     return confirm_with_fallback(f"[approval] {question} [y/N]: ", default=True)
 
 
@@ -134,7 +141,10 @@ async def run_streamed_turn(
     *,
     previous_response_id: str | None = None,
 ) -> tuple[str, str]:
-    """Run one streamed turn and handle HITL approvals if needed."""
+    """스트리밍 방식으로 한 턴을 실행하고 필요 시 사람 승인(HITL)을 처리합니다.
+
+    반환값은 `(response_id, final_output)` 튜플입니다.
+    """
     print(f"\nUser: {prompt}\n")
 
     result = ws.run_streamed(
@@ -147,6 +157,7 @@ async def run_streamed_turn(
 
     while True:
         async for event in result.stream_events():
+            # 원시 응답 이벤트 처리(추론 요약 델타, 출력 텍스트 델타 등)
             if event.type == "raw_response_event":
                 raw = event.data
                 if raw.type == "response.reasoning_summary_text.delta":
@@ -163,6 +174,7 @@ async def run_streamed_turn(
                     print(raw.delta, end="", flush=True)
                 continue
 
+            # run_item_stream_event: 도구 호출/결과 항목 처리
             if event.type != "run_item_stream_event":
                 continue
 
@@ -174,12 +186,15 @@ async def run_streamed_turn(
             elif item.type == "tool_call_output_item":
                 print(f"[tool result] {item.output}")
 
+        # reasoning/assistant 출력이 있었다면 줄바꿈을 추가합니다.
         if printed_reasoning or printed_output:
             print("\n")
 
+        # 중단(interruptions)이 없다면 턴이 완료된 것입니다.
         if not result.interruptions:
             break
 
+        # 중단이 있으면 상태로 변환하고 각 중단에 대해 승인/거부를 처리합니다.
         state = result.to_state()
         for interruption in result.interruptions:
             question = f"Approve {interruption.name} with args {interruption.arguments}?"
@@ -188,6 +203,7 @@ async def run_streamed_turn(
             else:
                 state.reject(interruption)
 
+        # 승인/거부 처리 후 같은 상태로 다시 실행합니다.
         result = ws.run_streamed(agent, state)
 
     if result.last_response_id is None:
@@ -237,10 +253,10 @@ async def main() -> None:
     )
 
     try:
-        # You can skip this helper and call Runner.run_streamed(...) directly.
-        # It will still work, but each run will create/connect again unless you manually
-        # reuse the same RunConfig/provider. This helper makes that reuse easy across turns
-        # (and nested agent-as-tool runs) so the websocket connection can stay warm.
+        # 이 헬퍼를 건너뛰고 Runner.run_streamed(...)를 직접 호출할 수도 있습니다.
+        # 하지만 그렇게 하면 각 실행에서 새 연결이 생성/연결될 수 있습니다.
+        # 이 헬퍼는 턴 간(및 중첩된 agent-as-tool 실행 간)에 동일한 연결/RunConfig를
+        # 재사용하기 쉽게 만들어 웹소켓 연결을 따뜻하게 유지합니다.
         async with responses_websocket_session() as ws:
             with trace("Responses WS support example") as current_trace:
                 print(f"Using model={model_name}")
@@ -263,6 +279,7 @@ async def main() -> None:
                     previous_response_id=first_response_id,
                 )
     except RuntimeError as exc:
+        # 웹소켓 모드가 이벤트를 보내기 전에 닫히면(계정/모델에 기능 미지원) 친절한 메시지를 출력합니다.
         if "closed before any response events" in str(exc):
             print(
                 "\nWebsocket mode closed before sending events. This usually means the "

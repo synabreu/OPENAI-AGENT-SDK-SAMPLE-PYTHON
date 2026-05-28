@@ -1377,10 +1377,24 @@ class OpenAIResponsesWSModel(OpenAIResponsesModel):
 
     def _merge_websocket_headers(self, extra_headers: Mapping[str, Any]) -> dict[str, str]:
         headers: dict[str, str] = {}
-        for key, value in self._client.default_headers.items():
-            if _is_openai_omitted_value(value):
-                continue
-            headers[key] = str(value)
+
+        def merge_header_mapping(source: Mapping[str, Any]) -> None:
+            for key, value in source.items():
+                if _is_openai_omitted_value(value):
+                    continue
+                header_key = str(key)
+                for existing_key in list(headers):
+                    if existing_key.lower() == header_key.lower():
+                        del headers[existing_key]
+                headers[header_key] = str(value)
+
+        merge_header_mapping(self._client.default_headers)
+
+        auth_headers = getattr(self._client, "auth_headers", None)
+        if auth_headers is not None and not _is_openai_omitted_value(auth_headers):
+            if not isinstance(auth_headers, Mapping):
+                raise UserError("Responses websocket auth headers must be a mapping.")
+            merge_header_mapping(auth_headers)
 
         for key, value in extra_headers.items():
             if isinstance(value, NotGiven):

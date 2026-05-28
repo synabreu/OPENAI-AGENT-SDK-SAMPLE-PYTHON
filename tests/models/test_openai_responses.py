@@ -3225,6 +3225,25 @@ async def test_websocket_model_prepare_websocket_request_omit_removes_inherited_
 
 @pytest.mark.allow_call_model_methods
 @pytest.mark.asyncio
+async def test_websocket_model_prepare_websocket_request_includes_sdk_auth_headers():
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key="test-key")
+    model = OpenAIResponsesWSModel(model="gpt-4", openai_client=client)
+
+    _frame, _ws_url, headers = await model._prepare_websocket_request(
+        {
+            "model": "gpt-4",
+            "input": "hi",
+            "stream": True,
+        }
+    )
+
+    assert headers["Authorization"] == "Bearer test-key"
+
+
+@pytest.mark.allow_call_model_methods
+@pytest.mark.asyncio
 async def test_websocket_model_prepare_websocket_request_replaces_header_case_insensitively():
     client = DummyWSClient()
     model = OpenAIResponsesWSModel(model="gpt-4", openai_client=client)  # type: ignore[arg-type]

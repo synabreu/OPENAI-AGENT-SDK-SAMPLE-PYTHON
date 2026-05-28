@@ -1,3 +1,18 @@
+"""터미널에서 예제를 실행하는 방법(한글 설명)
+
+1. (선택) 가상환경 활성화(포함된 `.venv` 사용 시):
+    source .venv/bin/activate
+
+2. (선택) 의존성 설치/동기화:
+    make sync
+
+3. 예제 실행:
+    python examples/basic/stream_text.py
+
+이 예제는 스트리밍 텍스트 델타(ResponseTextDeltaEvent)를 구독하여
+모델이 생성하는 텍스트를 실시간으로 출력하는 간단한 데모입니다.
+"""
+
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -45,13 +60,16 @@ from agents import Agent, Runner
 
 
 async def main():
+    # 에이전트 초기화: 간단한 지시문을 사용합니다.
     agent = Agent(
         name="Joker",
         instructions="You are a helpful assistant.",
     )
 
+    # 스트리밍 실행: 모델이 생성하는 텍스트 델타를 실시간으로 수신합니다.
     result = Runner.run_streamed(agent, input="Please tell me 5 jokes.")
     async for event in result.stream_events():
+        # ResponseTextDeltaEvent 타입의 델타를 수신하면 즉시 출력합니다.
         if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
             print(event.data.delta, end="", flush=True)
 

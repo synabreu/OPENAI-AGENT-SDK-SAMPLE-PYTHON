@@ -1,12 +1,24 @@
-"""Run multiple example entry points with optional auto mode and logging.
+"""예제 스크립트 일괄 실행 도구(한글 설명).
 
-Features:
-* Discovers ``__main__``-guarded example files under ``examples/``.
-* Skips interactive/server/audio/external examples unless explicitly included.
-* Auto mode (``EXAMPLES_INTERACTIVE_MODE=auto``) enables deterministic inputs,
-  auto-approvals, and turns on interactive examples by default.
-* Writes per-example logs to ``.tmp/examples-start-logs`` and a main summary log.
-* Generates a rerun list of failures at ``.tmp/examples-rerun.txt``.
+터미널에서 여러 예제 엔트리 포인트를 탐색하고 순차(또는 병렬) 실행하며
+로그와 실패 재실행 목록을 생성합니다.
+
+특징 요약:
+- `examples/` 내부의 `__main__` 가드가 있는 파이썬 파일을 탐색합니다.
+- 기본적으로 대화형/서버/오디오/외부 의존 예제는 건너뜁니다(옵션으로 포함 가능).
+- 자동 모드(`EXAMPLES_INTERACTIVE_MODE=auto`)는 결정론적 입력과 자동 승인을 사용합니다.
+- 각 예제의 로그는 `.tmp/examples-start-logs`에, 메인 요약 로그를 별도 파일에 씁니다.
+- 실패한 예제 경로를 `.tmp/examples-rerun.txt`에 기록할 수 있습니다.
+
+실행 방법(터미널 예시):
+1. 가상환경 활성화(선택):
+    source .venv/bin/activate
+2. 의존성 설치/동기화(선택):
+    make sync
+3. 예제 실행(예: 기본 hello 샘플):
+    python examples/run_examples.py --feature hello
+4. 모든 예제 실행(권장 아님, 시간이 오래 걸립니다):
+    python examples/run_examples.py --feature all
 """
 
 from __future__ import annotations
@@ -137,6 +149,7 @@ DEFAULT_AUTO_SKIP = {
 }
 
 
+# 데이터 클래스: 예제 스크립트 경로와 태그를 보관합니다.
 @dataclass
 class ExampleScript:
     path: Path
@@ -157,6 +170,7 @@ class ExampleScript:
         return [*build_uv_run_command(), "python", "-u", "-m", self.module]
 
 
+# 데이터 클래스: 개별 예제 실행 결과를 표현합니다.
 @dataclass
 class ExampleResult:
     script: ExampleScript
@@ -166,6 +180,7 @@ class ExampleResult:
     exit_code: int | None = None
 
 
+# 임시 Redis 서버를 나타내는 유틸리티 클래스입니다.
 @dataclass
 class TemporaryRedisServer:
     process: subprocess.Popen[bytes]
@@ -184,19 +199,24 @@ class TemporaryRedisServer:
 
 
 def normalize_relpath(relpath: str) -> str:
+    # 파일 경로를 POSIX 스타일로 정규화합니다 (윈도우 경로 지원).
     normalized = relpath.replace("\\", "/")
     return str(PurePosixPath(normalized))
 
 
 def split_path_entries(path_value: str) -> list[str]:
+    # PATH-like 문자열을 분할하여 존재하는 항목 배열로 반환합니다.
     return [entry for entry in path_value.split(os.pathsep) if entry]
 
 
 def split_words(value: str) -> list[str]:
+    # 공백으로 구분된 단어 목록을 반환합니다.
     return [entry for entry in value.split() if entry]
 
 
 def build_uv_run_command() -> list[str]:
+    # `uv run` 명령을 시작으로 `EXAMPLES_UV_EXTRAS` 환경변수에 따라
+    # 추가 인자를 붙여 반환합니다.
     command = ["uv", "run"]
     for extra in split_words(os.environ.get("EXAMPLES_UV_EXTRAS", "")):
         command.extend(["--extra", extra])
@@ -204,6 +224,7 @@ def build_uv_run_command() -> list[str]:
 
 
 def dedupe_existing_paths(paths: Iterable[str]) -> list[str]:
+    # 경로 리스트의 중복 제거 및 존재하지 않는 경로 필터링
     deduped: list[str] = []
     seen: set[str] = set()
     for entry in paths:
@@ -227,6 +248,8 @@ def interactive_shell_path() -> str | None:
     if shell_name not in {"bash", "zsh"}:
         return None
 
+    # 현재 사용자 셸의 PATH 값을 쿼리하여, 인터랙티브 셸에서 사용되는
+    # PATH를 얻어옵니다. bash/zsh만 지원합니다.
     try:
         result = subprocess.run(
             [shell, "-lic", 'printf "%s" "$PATH"'],
@@ -243,6 +266,7 @@ def interactive_shell_path() -> str | None:
 
 
 def build_command_path(base_path: str | None = None) -> str:
+    # 서브프로세스 실행에 사용할 PATH 값을 구성합니다.
     candidates: list[str] = []
     if base_path is None:
         base_path = os.environ.get("PATH", "")
@@ -257,6 +281,7 @@ def build_command_path(base_path: str | None = None) -> str:
 
 
 def build_python_path(base_path: str | None = None) -> str:
+    # PYTHONPATH에 추가할 경로를 만듭니다. 기본적으로 레포 루트를 포함합니다.
     candidates = [str(ROOT_DIR)]
     if base_path:
         candidates.extend(split_path_entries(base_path))
@@ -264,6 +289,7 @@ def build_python_path(base_path: str | None = None) -> str:
 
 
 def choose_loopback_port() -> int:
+    # 사용 가능한 빈 루프백 포트를 선택해 반환합니다.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         address = sock.getsockname()
@@ -271,6 +297,7 @@ def choose_loopback_port() -> int:
 
 
 def redis_url_host_port(url: str) -> tuple[str, int] | None:
+    # redis URL에서 호스트와 포트를 파싱하여 반환합니다. 스킴이 redis/rediss여야 합니다.
     parsed = urlparse(url)
     if parsed.scheme not in {"redis", "rediss"}:
         return None
@@ -280,6 +307,7 @@ def redis_url_host_port(url: str) -> tuple[str, int] | None:
 
 
 def redis_url_is_local(url: str) -> bool:
+    # 주어진 redis URL이 로컬 호스트를 가리키는지 판단합니다.
     host_port = redis_url_host_port(url)
     if host_port is None:
         return False
@@ -288,6 +316,7 @@ def redis_url_is_local(url: str) -> bool:
 
 
 def redis_ping_url(url: str, timeout: float = 0.5) -> bool:
+    # 주어진 redis URL에 간단한 PING을 시도하여 연결 가능 여부를 확인합니다.
     host_port = redis_url_host_port(url)
     if host_port is None:
         return False
@@ -302,10 +331,12 @@ def redis_ping_url(url: str, timeout: float = 0.5) -> bool:
 
 
 def truthy_env_value(value: str | None) -> bool:
+    # 환경변수 문자열 값이 참(true)을 의미하는지 판단합니다.
     return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def dapr_sidecar_available(env: Mapping[str, str], timeout: float = 0.5) -> bool:
+    # Dapr 사이드카의 엔드포인트에 접속 가능한지 확인합니다.
     endpoint = env.get("DAPR_HTTP_ENDPOINT", "http://127.0.0.1:3500")
     parsed = urlparse(endpoint)
     host = parsed.hostname or "127.0.0.1"
@@ -329,6 +360,7 @@ def prerequisite_skip_reasons(
     auto_mode: bool,
     env: Mapping[str, str],
 ) -> set[str]:
+    # 자동 모드에서 특정 전제 조건이 만족되지 않으면 스킵 사유를 반환합니다.
     if not auto_mode:
         return set()
     if relpath != DAPR_SESSION_EXAMPLE:
@@ -341,6 +373,7 @@ def prerequisite_skip_reasons(
 
 
 def start_temporary_redis_server() -> TemporaryRedisServer | None:
+    # 시스템에 redis-server가 있으면 임시 인스턴스를 시작합니다.
     redis_server = shutil.which("redis-server")
     if redis_server is None:
         return None
@@ -384,6 +417,7 @@ def prepare_redis_for_example(
     relpath: str,
     env: dict[str, str],
 ) -> tuple[TemporaryRedisServer | None, list[str]]:
+    # 예제가 Redis를 필요로 하지 않으면 바로 반환합니다.
     if relpath != REDIS_SESSION_EXAMPLE:
         return None, []
 
@@ -409,6 +443,7 @@ def prepare_redis_for_example(
 
 
 def parse_args() -> argparse.Namespace:
+    # 커맨드라인 인자 파싱을 수행합니다.
     parser = argparse.ArgumentParser(description="Run example scripts sequentially.")
     parser.add_argument(
         "--filter",
@@ -503,6 +538,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def detect_tags(path: Path, source: str) -> set[str]:
+    # 소스 코드 및 경로를 분석하여 예제의 태그들(interactive, server, audio, external 등)을 감지합니다.
     tags: set[str] = set()
     lower_source = source.lower()
     lower_parts = [part.lower() for part in path.parts]
@@ -535,6 +571,7 @@ def detect_tags(path: Path, source: str) -> set[str]:
 
 
 def discover_examples(filters: Iterable[str]) -> list[ExampleScript]:
+    # 예제 파일들을 탐색하여 ExampleScript 객체 리스트를 반환합니다.
     filters_lower = [f.lower() for f in filters]
     examples: list[ExampleScript] = []
 
@@ -572,6 +609,7 @@ def should_skip(
     relpath: str,
     auto_mode: bool,
 ) -> tuple[bool, set[str]]:
+    # 주어진 태그/설정에 따라 이 예제를 건너뛸지 여부와 그 사유 집합을 반환합니다.
     blocked = {"interactive", "server", "audio", "external"} - allowed_overrides
     active_blockers = tags & blocked
     if auto_mode and relpath in auto_skip_set:
@@ -649,6 +687,7 @@ def parse_rerun_from_log(log_path: Path) -> list[str]:
 
 
 def run_examples(examples: Sequence[ExampleScript], args: argparse.Namespace) -> int:
+    """메인 런너: 예제 목록을 받아 각 예제를 (병렬) 실행하고 로그/요약을 작성합니다."""
     overrides: set[str] = set()
     if args.include_interactive or env_flag("EXAMPLES_INCLUDE_INTERACTIVE"):
         overrides.add("interactive")
@@ -914,6 +953,7 @@ def run_examples(examples: Sequence[ExampleScript], args: argparse.Namespace) ->
 
 
 def main() -> int:
+    """스크립트 진입점: 커맨드라인 인자 처리를 하고 `run_examples`를 호출합니다."""
     args = parse_args()
     if args.print_auto_skip:
         for entry in sorted(load_auto_skip()):
